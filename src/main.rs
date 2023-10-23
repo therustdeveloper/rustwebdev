@@ -1,16 +1,30 @@
-use serde::Serialize;
-use std::io::{Error, ErrorKind};
-use std::str::FromStr;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fmt::Formatter;
 use warp::{
     filters::cors::CorsForbidden, http::Method, http::StatusCode, reject::Reject, Filter,
     Rejection, Reply,
 };
 
-#[derive(Debug)]
-struct InvalidId;
-impl Reject for InvalidId {}
+#[derive(Debug, Clone)]
+struct Store {
+    questions: HashMap<QuestionId, Question>,
+}
 
-#[derive(Debug, Serialize)]
+impl Store {
+    fn new() -> Self {
+        Store {
+            questions: Self::init(),
+        }
+    }
+
+    fn init() -> HashMap<QuestionId, Question> {
+        let file = include_str!("../questions.json");
+        serde_json::from_str(file).expect("can't read questions.json")
+    }
+}
+
+#[derive(Deserialize, Debug, Serialize, Clone)]
 struct Question {
     id: QuestionId,
     title: String,
@@ -18,55 +32,60 @@ struct Question {
     tags: Option<Vec<String>>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Deserialize, Debug, Serialize, Clone, Eq, PartialEq, Hash)]
 struct QuestionId(String);
 
-impl FromStr for QuestionId {
-    type Err = std::io::Error;
+#[derive(Debug)]
+enum Error {
+    ParseError(std::num::ParseIntError),
+    MissingParameters,
+}
 
-    fn from_str(id: &str) -> Result<Self, Self::Err> {
-        match id.is_empty() {
-            false => Ok(QuestionId(id.to_string())),
-            true => Err(Error::new(ErrorKind::InvalidInput, "No id provided")),
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match *self {
+            Error::ParseError(ref err) => {
+                write!(f, "Cannot parse paramter: {}", err)
+            },
+            Error::MissingParameters => write!(f, "Missing parameter"),
         }
     }
 }
 
-impl Question {
-    fn new(id: QuestionId, title: String, content: String, tags: Option<Vec<String>>) -> Self {
-        Question {
-            id,
-            title,
-            content,
-            tags,
-        }
-    }
+
+impl Reject for Error {}
+
+#[derive(Debug)]
+struct Pagination {
+    start: usize,
+    end: usize,
 }
 
-async fn get_questions() -> Result<impl warp::Reply, warp::Rejection> {
-    let question = Question::new(
-        QuestionId::from_str("1").expect("No id provided"),
-        "First Question".to_string(),
-        "Content of question".to_string(),
-        Some(vec!["faq".to_string()]),
-    );
-
-    match question.id.0.parse::<i32>() {
-        Err(_) => Err(warp::reject::custom(InvalidId)),
-        Ok(_) => Ok(warp::reply::json(&question)),
+async fn get_questions(
+    params: HashMap<String, String>,
+    store: Store,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    if !params.is_empty() {
+        let pagination = extract_pagination(params)?;
+        let res: Vec<Question> = store.questions.values().cloned().collect();
+        let res = &res[pagination.start..pagination.end];
+        Ok(warp::reply::json(&res))
+    } else {
+        let res: Vec<Question> = store.questions.values().cloned().collect();
+        Ok(warp::reply::json(&res))
     }
 }
 
 async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
-    if let Some(error) = r.find::<CorsForbidden>() {
+    if let Some(error) = r.find::<Error>() {
+        Ok(warp::reply::with_status(
+            error.to_string(),
+            StatusCode::RANGE_NOT_SATISFIABLE,
+        ))
+    } else if let Some(error) = r.find::<CorsForbidden>() {
         Ok(warp::reply::with_status(
             error.to_string(),
             StatusCode::FORBIDDEN,
-        ))
-    } else if let Some(InvalidId) = r.find() {
-        Ok(warp::reply::with_status(
-            "No valid ID presented".to_string(),
-            StatusCode::UNPROCESSABLE_ENTITY,
         ))
     } else {
         Ok(warp::reply::with_status(
@@ -76,20 +95,44 @@ async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
     }
 }
 
+fn extract_pagination(params: HashMap<String, String>) -> Result<Pagination, Error> {
+    if params.contains_key("start") && params.contains_key("end") {
+        return Ok(Pagination {
+            start: params
+                .get("start")
+                .unwrap()
+                .parse::<usize>()
+                .map_err(Error::ParseError)?,
+            end: params
+                .get("end")
+                .unwrap()
+                .parse::<usize>()
+                .map_err(Error::ParseError)?,
+        });
+    }
+
+    Err(Error::MissingParameters)
+}
+
 #[tokio::main]
 async fn main() {
+    let store = Store::new();
+    let store_filter = warp::any().map(move || store.clone());
+
     let cors = warp::cors()
         .allow_any_origin()
         .allow_header("content-type")
         .allow_methods(&[Method::PUT, Method::DELETE, Method::GET, Method::POST]);
 
-    let get_items = warp::get()
+    let get_questions = warp::get()
         .and(warp::path("questions"))
         .and(warp::path::end())
+        .and(warp::query())
+        .and(store_filter)
         .and_then(get_questions)
         .recover(return_error);
 
-    let routes = get_items.with(cors);
+    let routes = get_questions.with(cors);
 
     warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
 }
