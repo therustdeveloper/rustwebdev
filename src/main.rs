@@ -3,9 +3,9 @@
 use warp::{http::Method, Filter};
 
 mod errors;
+mod routes;
 mod store;
 mod types;
-mod routes;
 
 #[tokio::main]
 async fn main() {

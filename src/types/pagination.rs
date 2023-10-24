@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use crate::errors::Error;
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Pagination {
@@ -30,12 +30,12 @@ pub fn extract_pagination(params: HashMap<String, String>) -> Result<Pagination,
                 .get("start")
                 .unwrap()
                 .parse::<usize>()
-                .map_err(Error::ParseError)?,
+                .map_err(Error::Parse)?,
             end: params
                 .get("end")
                 .unwrap()
                 .parse::<usize>()
-                .map_err(Error::ParseError)?,
+                .map_err(Error::Parse)?,
         });
     }
 
