@@ -6,14 +6,11 @@ use crate::types::{
     answer::{Answer, AnswerId},
     question::{Question, QuestionId},
 };
-
-
 #[derive(Debug, Clone)]
 pub struct Store {
     pub questions: Arc<RwLock<HashMap<QuestionId, Question>>>,
     pub answers: Arc<RwLock<HashMap<AnswerId, Answer>>>,
 }
-
 impl Store {
     pub fn new() -> Self {
         Store {
