@@ -17,7 +17,6 @@ impl Store {
             questions: Self::init(),
         }
     }
-
     fn init() -> HashMap<QuestionId, Question> {
         let file = include_str!("../questions.json");
         serde_json::from_str(file).expect("can't read questions.json")
@@ -46,12 +45,11 @@ impl std::fmt::Display for Error {
         match *self {
             Error::ParseError(ref err) => {
                 write!(f, "Cannot parse paramter: {}", err)
-            },
+            }
             Error::MissingParameters => write!(f, "Missing parameter"),
         }
     }
 }
-
 
 impl Reject for Error {}
 
