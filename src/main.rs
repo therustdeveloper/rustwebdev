@@ -68,8 +68,17 @@ async fn get_questions(
     if !params.is_empty() {
         let pagination = extract_pagination(params)?;
         let res: Vec<Question> = store.questions.values().cloned().collect();
-        let res = &res[pagination.start..pagination.end];
-        Ok(warp::reply::json(&res))
+        // this logic is not well-designed but allows us to continue
+        if res.len() == 1 {
+            let res = &res[..];
+            Ok(warp::reply::json(&res))
+        } else if pagination.end < res.len() {
+            let res = &res[pagination.start..pagination.end];
+            Ok(warp::reply::json(&res))
+        } else {
+            let res = &res[..res.len()];
+            Ok(warp::reply::json(&res))
+        }
     } else {
         let res: Vec<Question> = store.questions.values().cloned().collect();
         Ok(warp::reply::json(&res))
