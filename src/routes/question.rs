@@ -4,7 +4,7 @@ use warp::http::StatusCode;
 use crate::store::Store;
 use crate::types::pagination::{extract_pagination, prepare_pagination};
 use crate::types::question::{Question, QuestionId};
-use handle_errors::Error;
+use crate::errors::Error;
 
 pub async fn get_questions(
     params: HashMap<String, String>,

@@ -1,8 +1,8 @@
 #![warn(clippy::all)]
 
-use handle_errors::return_error;
 use warp::{http::Method, Filter};
 
+mod errors;
 mod store;
 mod types;
 mod routes;
@@ -59,7 +59,7 @@ async fn main() {
         .or(update_question)
         .or(delete_question)
         .with(cors)
-        .recover(return_error);
+        .recover(errors::return_error);
 
     warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
 }

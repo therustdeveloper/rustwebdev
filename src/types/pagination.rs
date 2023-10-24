@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use handle_errors::Error;
+use crate::errors::Error;
 
 #[derive(Debug)]
 pub struct Pagination {
