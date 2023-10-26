@@ -1,5 +1,6 @@
 #![warn(clippy::all)]
 
+use tracing_subscriber::fmt::format::FmtSpan;
 use warp::{http::Method, Filter};
 
 mod errors;
@@ -9,8 +10,16 @@ mod types;
 
 #[tokio::main]
 async fn main() {
+    let log_filter =
+        std::env::var("RUST_LOG").unwrap_or_else(|_| "rustwebdev=info,warp=error".to_owned());
+
     let store = store::Store::new();
     let store_filter = warp::any().map(move || store.clone());
+
+    tracing_subscriber::fmt()
+        .with_env_filter(log_filter)
+        .with_span_events(FmtSpan::CLOSE)
+        .init();
 
     let cors = warp::cors()
         .allow_any_origin()
@@ -29,7 +38,15 @@ async fn main() {
         .and(warp::path::end())
         .and(store_filter.clone())
         .and(warp::body::json())
-        .and_then(routes::question::add_question);
+        .and_then(routes::question::add_question)
+        .with(warp::trace(|info| {
+            tracing::info_span!(
+                "get_questions request",
+                method = %info.method(),
+                path = %info.path(),
+                id = %uuid::Uuid::new_v4(),
+            )
+        }));
 
     let update_question = warp::put()
         .and(warp::path("questions"))
@@ -59,6 +76,7 @@ async fn main() {
         .or(update_question)
         .or(delete_question)
         .with(cors)
+        .with(warp::trace::request())
         .recover(errors::return_error);
 
     warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
