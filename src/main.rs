@@ -2,6 +2,7 @@
 
 use tracing_subscriber::fmt::format::FmtSpan;
 use warp::{http::Method, Filter};
+
 mod errors;
 mod routes;
 mod store;
@@ -14,6 +15,12 @@ async fn main() {
 
     let store =
         store::Store::new("postgres://rustwebdev:metallica@localhost:5432/rustwebdev").await;
+
+    sqlx::migrate!()
+        .run(&store.clone().connection)
+        .await
+        .expect("Cannot run migration");
+
     let store_filter = warp::any().map(move || store.clone());
 
     tracing_subscriber::fmt()
