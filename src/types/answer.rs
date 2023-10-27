@@ -10,4 +10,10 @@ pub struct Answer {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AnswerId(pub String);
+pub struct AnswerId(pub i32);
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct NewAnswer {
+    pub content: String,
+    pub question_id: QuestionId,
+}
