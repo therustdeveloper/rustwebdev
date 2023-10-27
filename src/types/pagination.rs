@@ -1,40 +1,26 @@
 use crate::errors::Error;
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct Pagination {
-    pub start: usize,
-    pub end: usize,
-}
-
-pub fn prepare_pagination(start: usize, end: usize, length: usize) -> (usize, usize) {
-    if length == 1 {
-        (0, 1)
-    } else if start > end {
-        if end < length {
-            (0, end)
-        } else {
-            (0, length)
-        }
-    } else if end > length {
-        (start, length)
-    } else {
-        (start, end)
-    }
+    pub limit: Option<i32>,
+    pub offset: i32,
 }
 
 pub fn extract_pagination(params: HashMap<String, String>) -> Result<Pagination, Error> {
-    if params.contains_key("start") && params.contains_key("end") {
+    if params.contains_key("limit") && params.contains_key("offset") {
         return Ok(Pagination {
-            start: params
-                .get("start")
+            limit: Some(
+                params
+                    .get("limit")
+                    .unwrap()
+                    .parse::<i32>()
+                    .map_err(Error::Parse)?,
+            ),
+            offset: params
+                .get("offset")
                 .unwrap()
-                .parse::<usize>()
-                .map_err(Error::Parse)?,
-            end: params
-                .get("end")
-                .unwrap()
-                .parse::<usize>()
+                .parse::<i32>()
                 .map_err(Error::Parse)?,
         });
     }
