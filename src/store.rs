@@ -2,7 +2,9 @@ use sqlx::postgres::{PgPool, PgPoolOptions, PgRow};
 use sqlx::Row;
 
 use crate::errors::Error;
+use crate::types::account::AccountId;
 use crate::types::{
+    account::Account,
     answer::{Answer, AnswerId, NewAnswer},
     question::{NewQuestion, Question, QuestionId},
 };
@@ -45,9 +47,9 @@ impl Store {
             .await
         {
             Ok(questions) => Ok(questions),
-            Err(e) => {
-                tracing::event!(tracing::Level::ERROR, "{:?}", e);
-                Err(Error::DatabaseQueryError)
+            Err(error) => {
+                tracing::event!(tracing::Level::ERROR, "{:?}", error);
+                Err(Error::DatabaseQueryError(error))
             }
         }
     }
@@ -71,9 +73,9 @@ impl Store {
         .await
         {
             Ok(question) => Ok(question),
-            Err(e) => {
-                tracing::event!(tracing::Level::ERROR, "{:?}", e);
-                Err(Error::DatabaseQueryError)
+            Err(error) => {
+                tracing::event!(tracing::Level::ERROR, "{:?}", error);
+                Err(Error::DatabaseQueryError(error))
             }
         }
     }
@@ -103,9 +105,9 @@ impl Store {
         .await
         {
             Ok(question) => Ok(question),
-            Err(e) => {
-                tracing::event!(tracing::Level::ERROR, "{:?}", e);
-                Err(Error::DatabaseQueryError)
+            Err(error) => {
+                tracing::event!(tracing::Level::ERROR, "{:?}", error);
+                Err(Error::DatabaseQueryError(error))
             }
         }
     }
@@ -117,9 +119,9 @@ impl Store {
             .await
         {
             Ok(_) => Ok(true),
-            Err(e) => {
-                tracing::event!(tracing::Level::ERROR, "{:?}", e);
-                Err(Error::DatabaseQueryError)
+            Err(error) => {
+                tracing::event!(tracing::Level::ERROR, "{:?}", error);
+                Err(Error::DatabaseQueryError(error))
             }
         }
     }
@@ -137,9 +139,57 @@ impl Store {
             .await
         {
             Ok(answer) => Ok(answer),
-            Err(e) => {
-                tracing::event!(tracing::Level::ERROR, "{:?}", e);
-                Err(Error::DatabaseQueryError)
+            Err(error) => {
+                tracing::event!(tracing::Level::ERROR, "{:?}", error);
+                Err(Error::DatabaseQueryError(error))
+            }
+        }
+    }
+
+    pub async fn add_account(self, account: Account) -> Result<bool, Error> {
+        match sqlx::query(
+            "INSERT INTO accounts (email, password)
+        VALUES ($1, $2)",
+        )
+        .bind(account.email)
+        .bind(account.password)
+        .execute(&self.connection)
+        .await
+        {
+            Ok(_) => Ok(true),
+            Err(error) => {
+                tracing::event!(
+                    tracing::Level::ERROR,
+                    code = error
+                        .as_database_error()
+                        .unwrap()
+                        .code()
+                        .unwrap()
+                        .parse::<i32>()
+                        .unwrap(),
+                    db_message = error.as_database_error().unwrap().message(),
+                    constraint = error.as_database_error().unwrap().constraint().unwrap()
+                );
+                Err(Error::DatabaseQueryError(error))
+            }
+        }
+    }
+
+    pub async fn get_account(self, email: String) -> Result<Account, Error> {
+        match sqlx::query("SELECT * from accounts where email = $1")
+            .bind(email)
+            .map(|row: PgRow| Account {
+                id: Some(AccountId(row.get("id"))),
+                email: row.get("email"),
+                password: row.get("password"),
+            })
+            .fetch_one(&self.connection)
+            .await
+        {
+            Ok(account) => Ok(account),
+            Err(error) => {
+                tracing::event!(tracing::Level::ERROR, "{:?}", error);
+                Err(Error::DatabaseQueryError(error))
             }
         }
     }
