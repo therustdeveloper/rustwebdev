@@ -5,6 +5,7 @@ use warp::{
     Rejection, Reply,
 };
 
+use reqwest::Error as ReqwestError;
 use tracing::{event, instrument, Level};
 
 #[derive(Debug)]
@@ -12,6 +13,21 @@ pub enum Error {
     Parse(std::num::ParseIntError),
     MissingParameters,
     DatabaseQueryError,
+    ExternalAPIError(ReqwestError),
+    ClientError(APILayerError),
+    ServerError(APILayerError),
+}
+
+#[derive(Debug, Clone)]
+pub struct APILayerError {
+    pub status: u16,
+    pub message: String,
+}
+
+impl std::fmt::Display for APILayerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Status: {}, Message: {}", self.status, self.message)
+    }
 }
 
 impl std::fmt::Display for Error {
@@ -22,11 +38,21 @@ impl std::fmt::Display for Error {
             Error::DatabaseQueryError => {
                 write!(f, "Cannot update, invalid data.")
             }
+            Error::ExternalAPIError(err) => {
+                write!(f, "Cannot execute: {}", err)
+            }
+            Error::ClientError(err) => {
+                write!(f, "External Client error: {}", err)
+            }
+            Error::ServerError(err) => {
+                write!(f, "External Server error: {}", err)
+            }
         }
     }
 }
 
 impl Reject for Error {}
+impl Reject for APILayerError {}
 
 #[instrument]
 pub async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
@@ -35,6 +61,24 @@ pub async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
         Ok(warp::reply::with_status(
             Error::DatabaseQueryError.to_string(),
             StatusCode::UNPROCESSABLE_ENTITY,
+        ))
+    } else if let Some(Error::ExternalAPIError(e)) = r.find() {
+        event!(Level::ERROR, "{}", e);
+        Ok(warp::reply::with_status(
+            "Internal Server Error".to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ))
+    } else if let Some(Error::ClientError(e)) = r.find() {
+        event!(Level::ERROR, "{}", e);
+        Ok(warp::reply::with_status(
+            "Internal Server Error".to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
+        ))
+    } else if let Some(Error::ServerError(e)) = r.find() {
+        event!(Level::ERROR, "{}", e);
+        Ok(warp::reply::with_status(
+            "Internal Server Error".to_string(),
+            StatusCode::INTERNAL_SERVER_ERROR,
         ))
     } else if let Some(error) = r.find::<CorsForbidden>() {
         event!(Level::ERROR, "CORS forbidden error: {}", error);

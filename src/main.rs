@@ -4,6 +4,7 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use warp::{http::Method, Filter};
 
 mod errors;
+mod profanity;
 mod routes;
 mod store;
 mod types;
