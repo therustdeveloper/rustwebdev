@@ -5,6 +5,7 @@ use warp::{
     Rejection, Reply,
 };
 
+use argon2::Error as ArgonError;
 use reqwest::Error as ReqwestError;
 use reqwest_middleware::Error as MiddlewareReqwestError;
 use tracing::{event, instrument, Level};
@@ -13,7 +14,11 @@ use tracing::{event, instrument, Level};
 pub enum Error {
     Parse(std::num::ParseIntError),
     MissingParameters,
-    DatabaseQueryError,
+    WrongPassword,
+    CannotDecryptToken,
+    Unauthorized,
+    ArgonLibraryError(ArgonError),
+    DatabaseQueryError(sqlx::Error),
     ReqwestAPIError(ReqwestError),
     MiddlewareReqwestAPIError(MiddlewareReqwestError),
     ClientError(APILayerError),
@@ -37,7 +42,15 @@ impl std::fmt::Display for Error {
         match self {
             Error::Parse(ref err) => write!(f, "Cannot parse parameter: {}", err),
             Error::MissingParameters => write!(f, "Missing parameter"),
-            Error::DatabaseQueryError => {
+            Error::WrongPassword => {
+                write!(f, "Wrong password")
+            }
+            Error::CannotDecryptToken => write!(f, "Cannot decrypt error"),
+            Error::Unauthorized => write!(f, "No permission to change the underlying resource"),
+            Error::ArgonLibraryError(_) => {
+                write!(f, "Cannot verify password")
+            }
+            Error::DatabaseQueryError(_) => {
                 write!(f, "Cannot update, invalid data.")
             }
             Error::ReqwestAPIError(err) => {
@@ -59,19 +72,49 @@ impl std::fmt::Display for Error {
 impl Reject for Error {}
 impl Reject for APILayerError {}
 
+const DUPLICATE_KEY: u32 = 23505;
+
 #[instrument]
 pub async fn return_error(r: Rejection) -> Result<impl Reply, Rejection> {
-    if let Some(Error::DatabaseQueryError) = r.find() {
+    if let Some(Error::DatabaseQueryError(e)) = r.find() {
         event!(Level::ERROR, "Database query error");
-        Ok(warp::reply::with_status(
-            Error::DatabaseQueryError.to_string(),
-            StatusCode::UNPROCESSABLE_ENTITY,
-        ))
+
+        match e {
+            sqlx::Error::Database(err) => {
+                if err.code().unwrap().parse::<u32>().unwrap() == DUPLICATE_KEY {
+                    Ok(warp::reply::with_status(
+                        "Account already exist".to_string(),
+                        StatusCode::UNPROCESSABLE_ENTITY,
+                    ))
+                } else {
+                    Ok(warp::reply::with_status(
+                        "Cannot update data".to_string(),
+                        StatusCode::UNPROCESSABLE_ENTITY,
+                    ))
+                }
+            }
+            _ => Ok(warp::reply::with_status(
+                "Cannot update data".to_string(),
+                StatusCode::UNPROCESSABLE_ENTITY,
+            )),
+        }
     } else if let Some(Error::ReqwestAPIError(e)) = r.find() {
         event!(Level::ERROR, "{}", e);
         Ok(warp::reply::with_status(
             "Internal Server Error".to_string(),
             StatusCode::INTERNAL_SERVER_ERROR,
+        ))
+    } else if let Some(Error::Unauthorized) = r.find() {
+        event!(Level::ERROR, "Not matching account id");
+        Ok(warp::reply::with_status(
+            "No permission to change underlying resource".to_string(),
+            StatusCode::UNAUTHORIZED,
+        ))
+    } else if let Some(Error::WrongPassword) = r.find() {
+        event!(Level::ERROR, "Entered wrong password");
+        Ok(warp::reply::with_status(
+            "Wrong E-mail/Password combination".to_string(),
+            StatusCode::UNAUTHORIZED,
         ))
     } else if let Some(Error::MiddlewareReqwestAPIError(e)) = r.find() {
         event!(Level::ERROR, "{}", e);
