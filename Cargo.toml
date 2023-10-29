@@ -21,3 +21,5 @@ rand = "0.8.5"
 rust-argon2 = "2.0.0"
 paseto = "2.0"
 chrono = "0.4.31"
+config = { version = "0.13.3", features = ["toml"] }
+clap = { version = "4.4.7", features = ["derive"] }

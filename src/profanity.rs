@@ -26,7 +26,7 @@ struct BadWordsResponse {
     censored_content: String,
 }
 
-pub async fn check_profanity(content: String) -> Result<String, Error> {
+pub async fn check_profanity(apikey: &String, content: String) -> Result<String, Error> {
     let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
     let client = ClientBuilder::new(reqwest::Client::new())
         .with(RetryTransientMiddleware::new_with_policy(retry_policy))
@@ -34,7 +34,7 @@ pub async fn check_profanity(content: String) -> Result<String, Error> {
 
     let res = client
         .post("https://api.apilayer.com/bad_words?censor_character=*")
-        .header("apikey", "YOUR_KEY")
+        .header("apikey", apikey)
         .body(content)
         .send()
         .await

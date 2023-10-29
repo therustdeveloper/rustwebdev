@@ -34,15 +34,17 @@ pub async fn get_questions(
 pub async fn add_question(
     session: Session,
     store: Store,
+    bad_words_api_key: String,
     new_question: NewQuestion,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let account_id = session.account_id;
-    let title = match check_profanity(new_question.title).await {
+    println!("{:?}", bad_words_api_key);
+    let title = match check_profanity(&bad_words_api_key, new_question.title).await {
         Ok(res) => res,
         Err(e) => return Err(warp::reject::custom(e)),
     };
 
-    let content = match check_profanity(new_question.content).await {
+    let content = match check_profanity(&bad_words_api_key, new_question.content).await {
         Ok(res) => res,
         Err(e) => return Err(warp::reject::custom(e)),
     };
@@ -63,13 +65,14 @@ pub async fn update_question(
     id: i32,
     session: Session,
     store: Store,
+    bad_words_api_key: String,
     question: Question,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let account_id = session.account_id;
 
     if store.is_question_owner(id, &account_id).await? {
-        let title = check_profanity(question.title);
-        let content = check_profanity(question.content);
+        let title = check_profanity(&bad_words_api_key, question.title);
+        let content = check_profanity(&bad_words_api_key, question.content);
 
         let (title, content) = tokio::join!(title, content);
 
