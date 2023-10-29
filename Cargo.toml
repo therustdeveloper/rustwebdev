@@ -23,3 +23,4 @@ paseto = "2.0"
 chrono = "0.4.31"
 config = { version = "0.13.3", features = ["toml"] }
 clap = { version = "4.4.7", features = ["derive"] }
+dotenv = "0.15.0"

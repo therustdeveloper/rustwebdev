@@ -7,11 +7,10 @@ use warp::http::StatusCode;
 pub async fn add_answer(
     session: Session,
     store: Store,
-    bad_words_api_key: String,
     new_answer: NewAnswer,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let account_id = session.account_id;
-    let content = match check_profanity(&bad_words_api_key, new_answer.content).await {
+    let content = match check_profanity(new_answer.content).await {
         Ok(res) => res,
         Err(e) => return Err(warp::reject::custom(e)),
     };
