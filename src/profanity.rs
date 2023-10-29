@@ -1,7 +1,9 @@
 use crate::errors::{APILayerError, Error};
+use dotenv;
 use reqwest_middleware::ClientBuilder;
 use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
 use serde::{Deserialize, Serialize};
+use std::env;
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct APIResponse {
@@ -26,7 +28,15 @@ struct BadWordsResponse {
     censored_content: String,
 }
 
-pub async fn check_profanity(apikey: &String, content: String) -> Result<String, Error> {
+pub async fn check_profanity(content: String) -> Result<String, Error> {
+    // loads the variables in .env file
+    dotenv::dotenv().ok();
+
+    if let Err(_) = env::var("BAD_WORDS_API_KEY") {
+        panic!("Badwords API Key not set");
+    }
+
+    let api_key = env::var("BAD_WORDS_API_KEY").unwrap();
     let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
     let client = ClientBuilder::new(reqwest::Client::new())
         .with(RetryTransientMiddleware::new_with_policy(retry_policy))
@@ -34,7 +44,7 @@ pub async fn check_profanity(apikey: &String, content: String) -> Result<String,
 
     let res = client
         .post("https://api.apilayer.com/bad_words?censor_character=*")
-        .header("apikey", apikey)
+        .header("apikey", api_key)
         .body(content)
         .send()
         .await

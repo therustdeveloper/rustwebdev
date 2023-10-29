@@ -52,8 +52,6 @@ async fn main() {
 
     let store_filter = warp::any().map(move || store.clone());
 
-    let config_filter = warp::any().map(move || config.bad_words_api_key.clone());
-
     tracing_subscriber::fmt()
         .with_env_filter(log_filter)
         .with_span_events(FmtSpan::CLOSE)
@@ -76,7 +74,6 @@ async fn main() {
         .and(warp::path::end())
         .and(routes::authentication::auth())
         .and(store_filter.clone())
-        .and(config_filter.clone())
         .and(warp::body::json())
         .and_then(routes::question::add_question);
 
@@ -86,7 +83,6 @@ async fn main() {
         .and(warp::path::end())
         .and(routes::authentication::auth())
         .and(store_filter.clone())
-        .and(config_filter.clone())
         .and(warp::body::json())
         .and_then(routes::question::update_question);
 
@@ -103,7 +99,6 @@ async fn main() {
         .and(warp::path::end())
         .and(routes::authentication::auth())
         .and(store_filter.clone())
-        .and(config_filter.clone())
         .and(warp::body::form())
         .and_then(routes::answer::add_answer);
 
